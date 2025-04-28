@@ -1,0 +1,164 @@
+#!/bin/bash
+
+# Shortcut file location
+CDD_FILE="$HOME/.cdd"
+
+# Display usage information.
+Usage() {
+  cat <<EOF
+cdd v1.2 - Guillaume Singer 2012-2025
+
+Usage:
+    . cdd <shortcut>[/subdir]  Change directory to the <shortcut> one
+                               shortcut can be followed by a subdir
+    . cdd <shortcut> <target>  Assign the shortcut to the <target>* directory 
+                               <target> : absolute or relative path
+    . cdd --list               List all shortcuts (alias : -l)
+    . cdd --rm <shortcut>      Remove the specified shortcut.
+
+Examples:
+      cdd prj ~/dev/myproject
+      cdd prj                 # jump to ~/dev/myproject
+      cdd prj/output          # jump to ~/dev/myproject/output
+      cdd -l                  # list all shortcuts
+      cdd --rm prj            # remove the shortcut 'prj'
+EOF
+}
+
+# List all defined shortcuts.
+List() {
+  if [[ ! -f "$CDD_FILE" ]]; then
+    echo "No shortcuts found. File '$CDD_FILE' does not exist."
+    return 0
+  fi
+  echo "Content of $CDD_FILE:"
+  echo "-------------------------------------------"
+  sort "$CDD_FILE" | column -t -s ';' -N SHORTCUT,PATH
+  echo ""
+}
+
+# Remove the specified shortcut safely.
+RemoveShortcut() {
+  local shortcut_to_remove="$1"
+  
+  # If the file doesn't exist, there is nothing to remove.
+  if [[ ! -f "$CDD_FILE" ]]; then
+    return 0
+  fi
+
+  local temp_file
+  temp_file=$(mktemp)
+  
+  while IFS=';' read -r key value; do
+    if [[ "$key" != "$shortcut_to_remove" ]]; then
+      echo "${key};${value}" >> "$temp_file"
+    fi
+  done < "$CDD_FILE"
+  
+  mv "$temp_file" "$CDD_FILE"
+}
+
+# Jump to the directory mapped to the given shortcut.
+JumpAt() {
+  local input="$1"
+  local shortcut="${input%%/*}"
+  local relative_path="${input#*/}"
+  
+     if [ "$relative_path" == "$shortcut" ]; then
+        relative_path=""
+    else
+        relative_path="/$relative_path"
+    fi
+
+
+  if [[ ! -f "$CDD_FILE" ]]; then
+    echo "Shortcut file not found. Please create one using: cdd <shortcut> <target>"
+    return 1
+  fi
+
+  while IFS=';' read -r key value; do
+    if [[ "$key" == "$shortcut" ]]; then
+
+      local resolved_path="${value}${relative_path}"
+
+      if [[ -d "$resolved_path" ]]; then
+        cd "$resolved_path" || { echo "Failed to change directory to $resolved_path"; return 1; }
+        return 0
+      else
+        echo "Directory '$resolved_path' for shortcut '$shortcut' does not exist."
+        return 1
+      fi
+    fi
+  done < "$CDD_FILE"
+
+  echo "Shortcut '$shortcut' not found."
+  return 1
+}
+
+# Process one argument commands.
+OneArg() {
+  local arg="$1"
+  case "$arg" in
+    --list|-l)
+      List
+      ;;
+    *)
+      JumpAt "$arg"
+      ;;
+  esac
+}
+
+# Process two argument commands.
+TwoArgs() {
+  local shortcut="$1"
+  local target="$2"
+
+  case "$shortcut" in
+    --rm)
+      RemoveShortcut "$target"
+      ;;
+    
+    *)
+      if [[ "$target" == "." ]]; then
+        target="$(pwd)"
+      fi
+
+      absolute_path=$(readlink -m "$target")
+
+      if [[ ! -d "$absolute_path" ]]; then
+        echo "Target directory '$absolute_path' does not exist."
+        return 1
+      fi
+      # Remove any existing entry for the same shortcut before adding the new one.
+      RemoveShortcut "$shortcut"
+      echo "${shortcut};${absolute_path}" >> "$CDD_FILE"
+      ;;
+  esac
+}
+
+main() {
+  # Ensure the shortcuts file exists.
+  if [[ ! -f "$CDD_FILE" ]]; then
+    touch "$CDD_FILE"
+  fi
+
+  case "$#" in
+    0)
+      Usage
+      return 0
+      ;;
+    1)
+      OneArg "$1"
+      ;;
+    2)
+      TwoArgs "$1" "$2"
+      ;;
+    *)
+      echo "Error: Too many arguments provided."
+      Usage
+      return 1
+      ;;
+  esac
+}
+
+main "$@"
