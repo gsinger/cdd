@@ -9,19 +9,21 @@ Usage() {
 cdd v1.2 - Guillaume Singer 2012-2025
 
 Usage:
-    . cdd <shortcut>[/subdir]  Change directory to the <shortcut> one
-                               shortcut can be followed by a subdir
-    . cdd <shortcut> <target>  Assign the shortcut to the <target>* directory 
-                               <target> : absolute or relative path
-    . cdd --list               List all shortcuts (alias : -l)
+    . cdd <shortcut>           Change directory to the <shortcut> one.
+    . cdd <shortcut>/subdir    Change directory to the <shortcut>/subdir one.      
+    . cdd <shortcut> <target>  Assign the shortcut to the <target>* directory.
+                               target can be absolute or relative path. (. or ~ are allowed)
+    . cdd --list               List all shortcuts. (alias : -l)
     . cdd --rm <shortcut>      Remove the specified shortcut.
 
+      with <target> : absolute or relative path
+
 Examples:
-      cdd prj ~/dev/myproject
-      cdd prj                 # jump to ~/dev/myproject
-      cdd prj/output          # jump to ~/dev/myproject/output
-      cdd -l                  # list all shortcuts
-      cdd --rm prj            # remove the shortcut 'prj'
+      cdd prj ~/dev/myproject # Set the shortcut 'prj' to ~/dev/myproject
+      cdd prj                 # Jump to ~/dev/myproject
+      cdd prj/output          # Jump to ~/dev/myproject/output
+      cdd -l                  # List all shortcuts
+      cdd --rm prj            # Remove the shortcut 'prj'
 EOF
 }
 
@@ -70,6 +72,10 @@ JumpAt() {
         relative_path="/$relative_path"
     fi
 
+  if [ "$shortcut" == "" ]; then
+    echo "shortcut $input is invalid"
+    return 1
+  fi
 
   if [[ ! -f "$CDD_FILE" ]]; then
     echo "Shortcut file not found. Please create one using: cdd <shortcut> <target>"
@@ -122,6 +128,12 @@ TwoArgs() {
       if [[ "$target" == "." ]]; then
         target="$(pwd)"
       fi
+
+      if [[ ! "$shortcut" =~ ^[a-z0-9_-]+$ ]]; then
+        echo "Error: Invalid shortcut '$shortcut'. Allowed characters in a shortcut are a-z, 0-9, _ and -"
+        return 1
+      fi
+
 
       absolute_path=$(readlink -m "$target")
 
